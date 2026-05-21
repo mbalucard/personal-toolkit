@@ -7,6 +7,7 @@ from werkzeug.security import check_password_hash
 from webapp.db import session_scope
 from webapp.extensions import login_manager
 from webapp.models import User, UserLoginLog
+from webapp.services.redis_client import RedisUnavailableError, ping_or_raise
 
 
 bp = Blueprint("auth", __name__)
@@ -48,6 +49,11 @@ def login_post():
     Returns:
         Response | str: 登录成功时重定向；失败时返回带错误信息的登录页面。
     """
+    try:
+        ping_or_raise()
+    except RedisUnavailableError as exc:
+        return render_template("login.html", error=str(exc), redis_popup=True)
+
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
 

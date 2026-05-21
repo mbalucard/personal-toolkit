@@ -18,8 +18,15 @@ class DockerPostgreSQL:
     database = os.getenv('DockerPostgreSQLDatabase')
 
 
+class RedisServer:
+    Host = os.getenv('RedisHost')
+    Port = os.getenv('RedisPort')
+    Password = os.getenv('RedisPassword')
+    DB = os.getenv('RedisDB')
+    TTL = os.getenv('RedisTTL')
+
+
 if __name__ == "__main__":
     print(DockerPostgreSQL.user)
-    print(DockerPostgreSQL.password)
-    print(DockerPostgreSQL.host)
-    print(DockerPostgreSQL.database)
+    print(RedisServer.Host)
+

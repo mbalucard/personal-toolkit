@@ -12,6 +12,11 @@
           <p>{{ error }}</p>
         </div>
       {% endif %}
+      {% if redis_popup and error %}
+        <script>
+          alert({{ error|tojson }});
+        </script>
+      {% endif %}
 
       <form class="ui large form" method="post" action="{{ url_for('auth.login_post') }}">
         <div class="field">
