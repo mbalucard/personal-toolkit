@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "药品更新" }}</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.css"
+    />
+    <style>
+      body {
+        background: #f5f7fb;
+        padding: 24px 0 40px;
+      }
+      .app-shell {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      .topbar-wrap {
+        margin-bottom: 24px;
+      }
+      .brand-title {
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .topbar-wrap .ui.secondary.pointing.menu .ui.dropdown.item:hover,
+      .topbar-wrap .ui.secondary.pointing.menu .ui.dropdown.item.active {
+        background: rgba(33, 133, 208, 0.08);
+        box-shadow: inset 0 -2px 0 rgba(33, 133, 208, 0.8);
+        border-radius: 10px;
+      }
+      .topbar-wrap .ui.secondary.pointing.menu .ui.dropdown.item {
+        position: relative;
+      }
+      .topbar-wrap .ui.secondary.pointing.menu .ui.dropdown.item > .menu {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        margin-top: 0 !important;
+        top: calc(100% - 2px) !important;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .page-card {
+        border-radius: 16px !important;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+      }
+      .page-title {
+        margin-bottom: 6px !important;
+      }
+      .page-desc {
+        color: rgba(0, 0, 0, 0.58);
+        margin-bottom: 0;
+      }
+      .section-gap {
+        margin-top: 20px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      .ui.table td,
+      .ui.table th {
+        white-space: nowrap;
+        vertical-align: top;
+      }
+      .login-shell {
+        max-width: 460px;
+        margin: 72px auto 0;
+      }
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(180px, 1fr));
+        grid-template-areas:
+          "version total_records total_pages rows_per_page spacer"
+          "current_page inserted_rows processed_pages page_elapsed total_elapsed";
+        gap: 12px;
+        align-items: stretch;
+      }
+      .stat-grid > .ui.segment {
+        margin: 0 !important;
+        height: 100%;
+      }
+      .stat-grid .stat-version {
+        grid-area: version;
+      }
+      .stat-grid .stat-total-records {
+        grid-area: total_records;
+      }
+      .stat-grid .stat-total-pages {
+        grid-area: total_pages;
+      }
+      .stat-grid .stat-rows-per-page {
+        grid-area: rows_per_page;
+      }
+      .stat-grid .stat-current-page {
+        grid-area: current_page;
+      }
+      .stat-grid .stat-inserted-rows {
+        grid-area: inserted_rows;
+      }
+      .stat-grid .stat-processed-pages {
+        grid-area: processed_pages;
+      }
+      .stat-grid .stat-page-elapsed {
+        grid-area: page_elapsed;
+      }
+      .stat-grid .stat-total-elapsed {
+        grid-area: total_elapsed;
+      }
+      .stat-grid .stat-spacer {
+        grid-area: spacer;
+        visibility: hidden;
+      }
+      @media (max-width: 1100px) {
+        .stat-grid {
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          grid-template-areas: none;
+        }
+        .stat-grid .stat-card {
+          grid-area: auto;
+        }
+        .stat-grid .stat-spacer {
+          display: none;
+        }
+      }
+      .soft-label {
+        color: rgba(0, 0, 0, 0.5);
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .value-text {
+        font-size: 18px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      {% if current_user.is_authenticated %}
+        <div class="topbar-wrap">
+          <div class="ui secondary pointing menu">
+            <div class="item brand-title">信息中心工具集</div>
+            <div class="ui simple dropdown item">
+              商品资料
+              <i class="dropdown icon"></i>
+              <div class="menu">
+                <a class="item" href="{{ url_for('medical_info.list_page') }}">商品查询</a>
+                <a class="item" href="{{ url_for('ingest.ingest_page') }}">抓取入库</a>
+              </div>
+            </div>
+            <div class="ui simple dropdown item">
+              用户管理
+              <i class="dropdown icon"></i>
+              <div class="menu">
+                <a class="item" href="{{ url_for('user_mgmt.user_settings') }}">用户设置</a>
+                <a class="item" href="{{ url_for('user_mgmt.login_logs') }}">登录日志</a>
+              </div>
+            </div>
+            <div class="right menu">
+              <a class="item" href="{{ url_for('auth.logout') }}">退出</a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>

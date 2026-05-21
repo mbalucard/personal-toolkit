@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="ui raised segment page-card">
+    <div class="ui stackable grid">
+      <div class="ten wide column">
+        <h2 class="ui header page-title">数据查询</h2>
+        <p class="page-desc">先选择版本号，再按药品代码、注册产品名称、本位码、批准文号进行筛选与分页浏览。</p>
+      </div>
+      <div class="six wide right aligned middle aligned column">
+        {% if selected_version %}
+          <div style="display: inline-flex; flex-direction: column; align-items: flex-end; gap: 10px;">
+            <div style="display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+              <button
+                id="export-cache-open"
+                class="ui button"
+                type="button"
+                style="background: #dff6e6; color: #0f5132;"
+              >
+                <i class="folder open outline icon"></i>
+                已生成文件
+              </button>
+              <div class="ui buttons">
+                <button id="export-standard-btn" class="ui teal button" type="button" data-style="standard">
+                  <i class="file excel outline icon"></i>
+                  导出标准
+                </button>
+                <div class="or"></div>
+                <button id="export-new-btn" class="ui purple button" type="button" data-style="new">
+                  <i class="file excel outline icon"></i>
+                  导出新版
+                </button>
+              </div>
+            </div>
+
+            <div id="export-progress-wrap" style="display:none; width: min(360px, 100%); text-align: left;">
+              <div
+                class="ui tiny progress"
+                style="margin: 0; height: 10px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden;"
+              >
+                <div
+                  id="export-progress-bar"
+                  class="bar"
+                  style="width: 0%; height: 10px; background: linear-gradient(90deg, #21ba45, #2ecc71); transition: width 0.25s ease;"
+                ></div>
+              </div>
+              <div class="page-desc" style="margin-top: 6px;">
+                写入行数：<span id="export-written">0</span> / <span id="export-total">-</span>
+              </div>
+              <div style="margin-top: 6px; display: none;" id="export-cancel-wrap">
+                <button id="export-cancel-btn" class="ui tiny red button" type="button">
+                  <i class="stop icon"></i>
+                  终止导出
+                </button>
+              </div>
+              <div style="margin-top: 6px; display: none;" id="export-download-wrap">
+                <a id="export-download-link" class="ui tiny button" href="#" target="_blank">
+                  <i class="download icon"></i>
+                  下载文件
+                </a>
+              </div>
+              <div class="page-desc" id="export-progress-message" style="margin-top: 6px; display:none;"></div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <form class="ui form section-gap" method="get" action="{{ url_for('medical_info.list_page') }}">
+      <div class="fields">
+        <div class="two wide required field">
+          <label>版本号</label>
+          <select name="version" class="ui dropdown" required>
+            <option value="" {% if not selected_version %}selected{% endif %}>请选择</option>
+            {% for v in versions %}
+              <option value="{{ v }}" {% if selected_version == v %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="two wide field">
+          <label>每页条数</label>
+          <select name="page_size" class="ui dropdown">
+            {% for s in allowed_page_sizes %}
+              <option value="{{ s }}" {% if page_size == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="three wide field">
+          <label>药品代码</label>
+          <input name="goodscode" value="{{ filters.goodscode }}" placeholder="药品代码" />
+        </div>
+        <div class="three wide field">
+          <label>注册产品名称</label>
+          <input name="registeredproductname" value="{{ filters.registeredproductname }}" placeholder="注册产品名称" />
+        </div>
+        <div class="three wide field">
+          <label>药品本位码</label>
+          <input name="goodsstandardcode" value="{{ filters.goodsstandardcode }}" placeholder="药品本位码" />
+        </div>
+        <div class="three wide field">
+          <label>批准文号</label>
+          <input name="approvalcode" value="{{ filters.approvalcode }}" placeholder="批准文号" />
+        </div>
+      </div>
+      <button class="ui primary button" type="submit">
+        <i class="search icon"></i>
+        开始查询
+      </button>
+    </form>
+
+    {% if result %}
+      <div class="ui divider section-gap"></div>
+      <div class="ui stackable grid">
+        <div class="eight wide column">
+          <div class="ui small statistics">
+            <div class="statistic">
+              <div class="value">{{ result.total }}</div>
+              <div class="label">总记录数</div>
+            </div>
+            <div class="statistic">
+              <div class="value">{{ page }}</div>
+              <div class="label">当前页</div>
+            </div>
+            <div class="statistic">
+              <div class="value">{{ total_pages }}</div>
+              <div class="label">总页数</div>
+            </div>
+          </div>
+        </div>
+        <div class="eight wide right aligned middle aligned column">
+          <div style="display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end;">
+            <div class="ui buttons">
+              {% if page > 1 %}
+                <a class="ui button" href="{{ url_for('medical_info.list_page', version=selected_version, goodscode=filters.goodscode, registeredproductname=filters.registeredproductname, goodsstandardcode=filters.goodsstandardcode, approvalcode=filters.approvalcode, page=page-1, page_size=page_size) }}">上一页</a>
+              {% else %}
+                <button class="ui button disabled" type="button">上一页</button>
+              {% endif %}
+              {% if total_pages and page < total_pages %}
+                <a class="ui button" href="{{ url_for('medical_info.list_page', version=selected_version, goodscode=filters.goodscode, registeredproductname=filters.registeredproductname, goodsstandardcode=filters.goodsstandardcode, approvalcode=filters.approvalcode, page=page+1, page_size=page_size) }}">下一页</a>
+              {% else %}
+                <button class="ui button disabled" type="button">下一页</button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap section-gap">
+        <table class="ui celled striped compact small table">
+          <thead>
+            <tr>
+              <th class="center aligned">序号</th>
+              <th>药品代码</th>
+              <th>历史商品代码</th>
+              <th>注册产品名称</th>
+              <th>注册剂型</th>
+              <th>注册规格</th>
+              <th>商品名</th>
+              <th>实际剂型</th>
+              <th>实际规格</th>
+              <th>包装材质</th>
+              <th>最小包装数量</th>
+              <th>最小包装单位</th>
+              <th>销售包装单位</th>
+              <th>追溯码标志</th>
+              <th>生产企业名称</th>
+              <th>生产企业或持有人名称</th>
+              <th>分包装企业</th>
+              <th>批准文号</th>
+              <th>旧批准文号</th>
+              <th>药品本位码</th>
+              <th>医保类别</th>
+              <th>产品代码</th>
+              <th>企业商品名</th>
+              <th>产品药品剂型</th>
+              <th>产品备注</th>
+              <th>营业执照统一社会信用代码</th>
+              <th>药品有效期（月）</th>
+              <th>儿童用药标志</th>
+              <th>是否OTC标志</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in result.items %}
+              <tr>
+                <td class="center aligned">{{ (page - 1) * page_size + loop.index }}</td>
+                <td>{{ row.goodscode }}</td>
+                <td>{{ row.goodsCodeHistory or '' }}</td>
+                <td>{{ row.registeredproductname or '' }}</td>
+                <td>{{ row.registeredmedicinemodel or '' }}</td>
+                <td>{{ row.registeredoutlook or '' }}</td>
+                <td>{{ row.goodsname or '' }}</td>
+                <td>{{ row.realitymedicinemodel or '' }}</td>
+                <td>{{ row.realityoutlook or '' }}</td>
+                <td>{{ row.materialname or '' }}</td>
+                <td>{{ row.factor or '' }}</td>
+                <td>{{ row.minunit or '' }}</td>
+                <td>{{ row.unit or '' }}</td>
+                <td>{{ row.traceCodeFlag or '' }}</td>
+                <td>{{ row.companynamesc or '' }}</td>
+                <td>{{ row.nameOrLhoder or '' }}</td>
+                <td>{{ row.subpackager or '' }}</td>
+                <td>{{ row.approvalcode or '' }}</td>
+                <td>{{ row.oldApprovalCode or '' }}</td>
+                <td>{{ row.goodsstandardcode or '' }}</td>
+                <td>{{ row.productinsurancetype or '' }}</td>
+                <td>{{ row.productcode or '' }}</td>
+                <td>{{ row.productname or '' }}</td>
+                <td>{{ row.productmedicinemodel or '' }}</td>
+                <td>{{ row.productremark or '' }}</td>
+                <td>{{ row.businessLicense or '' }}</td>
+                <td>{{ row.drugValidityDate or '' }}</td>
+                <td>{{ row.isChildDrugs or '' }}</td>
+                <td>{{ row.isOtc or '' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+  <div
+    id="export-cache-overlay"
+    style="display:none; position:fixed; inset:0; background: rgba(0,0,0,0.45); z-index: 1000; align-items:center; justify-content:center; padding: 24px;"
+  >
+    <div class="ui raised segment" style="width: min(920px, 100%); max-height: 80vh; overflow: auto; border-radius: 16px;">
+      <div class="ui stackable grid">
+        <div class="twelve wide column">
+          <h3 class="ui header" style="margin: 0;">已生成导出文件</h3>
+          <p class="page-desc" style="margin-top: 6px;">文件来自 webapp/temporary_data（超过 24 小时会自动清理）。</p>
+        </div>
+        <div class="four wide right aligned middle aligned column">
+          <button id="export-cache-close" class="ui button" type="button">关闭</button>
+        </div>
+      </div>
+      <div class="ui divider"></div>
+      <div id="export-cache-status" class="page-desc">正在加载...</div>
+      <div id="export-cache-list" class="table-wrap section-gap"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const openBtn = document.getElementById("export-cache-open");
+      const overlay = document.getElementById("export-cache-overlay");
+      const closeBtn = document.getElementById("export-cache-close");
+      const statusEl = document.getElementById("export-cache-status");
+      const listEl = document.getElementById("export-cache-list");
+
+      if (!openBtn || !overlay || !closeBtn || !statusEl || !listEl) {
+        return;
+      }
+
+      const show = () => {
+        overlay.style.display = "flex";
+      };
+      const hide = () => {
+        overlay.style.display = "none";
+      };
+
+      const formatSize = (bytes) => {
+        const n = Number(bytes || 0);
+        if (n < 1024) return `${n} B`;
+        const kb = n / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        const mb = kb / 1024;
+        if (mb < 1024) return `${mb.toFixed(1)} MB`;
+        const gb = mb / 1024;
+        return `${gb.toFixed(2)} GB`;
+      };
+
+      const renderList = (files) => {
+        if (!files || files.length === 0) {
+          statusEl.textContent = "当前没有可复用的导出文件。";
+          listEl.innerHTML = "";
+          return;
+        }
+
+        statusEl.textContent = `共 ${files.length} 个文件`;
+        const downloadTpl = `{{ url_for('medical_info.export_cached_download', filename='__FILENAME__') }}`;
+        const rowsHtml = files.map((f, idx) => {
+          const name = f.filename || "";
+          const downloadUrl = downloadTpl.replace("__FILENAME__", encodeURIComponent(name));
+          const dt = String(f.mtime_text || "").split(" ");
+          const dateText = dt[0] || "";
+          const timeText = dt[1] || "";
+          return `
+            <tr>
+              <td class="center aligned">${idx + 1}</td>
+              <td style="max-width: 520px; word-break: break-all;">
+                <a href="${downloadUrl}">${name}</a>
+              </td>
+              <td>${formatSize(f.size_bytes)}</td>
+              <td>${dateText}</td>
+              <td>${timeText}</td>
+            </tr>
+          `;
+        }).join("");
+
+        listEl.innerHTML = `
+          <table class="ui celled striped compact small table">
+            <thead>
+              <tr>
+                <th class="center aligned" style="width: 70px;">序号</th>
+                <th>文件名</th>
+                <th style="width: 120px;">文件大小</th>
+                <th style="width: 120px;">创建日期</th>
+                <th style="width: 110px;">创建时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+        `;
+      };
+
+      const loadFiles = async () => {
+        statusEl.textContent = "正在加载...";
+        listEl.innerHTML = "";
+        const resp = await fetch(`{{ url_for('medical_info.export_files') }}`);
+        const data = await resp.json();
+        if (!data.ok) {
+          throw new Error(data.error || "获取文件列表失败");
+        }
+        renderList(data.files || []);
+      };
+
+      openBtn.addEventListener("click", () => {
+        show();
+        loadFiles().catch((err) => {
+          statusEl.textContent = err.message || "加载失败";
+          listEl.innerHTML = "";
+        });
+      });
+
+      closeBtn.addEventListener("click", hide);
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) {
+          hide();
+        }
+      });
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          hide();
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    (() => {
+      const version = "{{ selected_version }}";
+      const standardBtn = document.getElementById("export-standard-btn");
+      const newBtn = document.getElementById("export-new-btn");
+      const wrap = document.getElementById("export-progress-wrap");
+      const bar = document.getElementById("export-progress-bar");
+      const writtenEl = document.getElementById("export-written");
+      const totalEl = document.getElementById("export-total");
+      const msgEl = document.getElementById("export-progress-message");
+      const cancelWrap = document.getElementById("export-cancel-wrap");
+      const cancelBtn = document.getElementById("export-cancel-btn");
+      const downloadWrap = document.getElementById("export-download-wrap");
+      const downloadLink = document.getElementById("export-download-link");
+
+      if (!version || !standardBtn || !newBtn || !wrap || !bar || !writtenEl || !totalEl) {
+        return;
+      }
+
+      const startUrl = `{{ url_for('medical_info.export_start') }}`;
+      const statusTpl = `{{ url_for('medical_info.export_status', job_id='__JOB__') }}`;
+      const cancelTpl = `{{ url_for('medical_info.export_cancel', job_id='__JOB__') }}`;
+      const downloadTpl = `{{ url_for('medical_info.export_cached_download', filename='__FILENAME__') }}`;
+
+      let timer = null;
+      let currentJobId = null;
+
+      const setDisabled = (disabled) => {
+        standardBtn.disabled = disabled;
+        newBtn.disabled = disabled;
+        standardBtn.classList.toggle("disabled", disabled);
+        newBtn.classList.toggle("disabled", disabled);
+      };
+
+      const showMessage = (text) => {
+        if (!msgEl) return;
+        const t = String(text || "").trim();
+        if (!t) {
+          msgEl.style.display = "none";
+          msgEl.textContent = "";
+          return;
+        }
+        msgEl.style.display = "block";
+        msgEl.textContent = t;
+      };
+
+      const setProgress = (written, total) => {
+        const w = Number(written || 0);
+        const t = total == null ? null : Number(total);
+        writtenEl.textContent = String(w);
+        totalEl.textContent = t == null ? "-" : String(t);
+        if (t && t > 0) {
+          const pct = Math.max(0, Math.min(100, Math.floor((w / t) * 100)));
+          bar.style.width = `${pct}%`;
+        } else {
+          bar.style.width = "0%";
+        }
+      };
+
+      const stopPolling = () => {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      };
+
+      const showCancel = (show) => {
+        if (!cancelWrap) return;
+        cancelWrap.style.display = show ? "block" : "none";
+      };
+
+      const poll = async () => {
+        if (!currentJobId) return;
+        const url = statusTpl.replace("__JOB__", encodeURIComponent(currentJobId));
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (!data.ok) {
+          throw new Error(data.error || "获取导出进度失败");
+        }
+        const job = data.job || {};
+        const status = job.status;
+        setProgress(job.written_rows, job.total_rows);
+
+        if (status === "queued") {
+          showMessage(job.message || "任务排队中...");
+          showCancel(true);
+        } else if (status === "running") {
+          showMessage(job.message || "正在导出...");
+          showCancel(true);
+        } else if (status === "success") {
+          showMessage(job.message || "导出已完成");
+          bar.style.width = "100%";
+          stopPolling();
+          setDisabled(false);
+          showCancel(false);
+          const filename = job.filename;
+          if (filename && downloadWrap && downloadLink) {
+            const downloadUrl = downloadTpl.replace("__FILENAME__", encodeURIComponent(filename));
+            downloadLink.href = downloadUrl;
+            downloadWrap.style.display = "block";
+          }
+        } else if (status === "cancelled") {
+          showMessage(job.message || "导出已终止");
+          stopPolling();
+          setDisabled(false);
+          showCancel(false);
+        } else if (status === "error") {
+          showMessage(job.message || "导出失败");
+          stopPolling();
+          setDisabled(false);
+          showCancel(false);
+        }
+      };
+
+      const startExport = async (style) => {
+        stopPolling();
+        currentJobId = null;
+        if (downloadWrap) {
+          downloadWrap.style.display = "none";
+        }
+        showCancel(false);
+        wrap.style.display = "block";
+        showMessage("");
+        setProgress(0, null);
+        setDisabled(true);
+
+        const resp = await fetch(startUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ style, version }),
+        });
+        const data = await resp.json();
+        if (!data.ok) {
+          setDisabled(false);
+          throw new Error(data.error || "创建导出任务失败");
+        }
+        currentJobId = data.job_id;
+        showMessage("任务已创建，正在准备...");
+        showCancel(true);
+        timer = setInterval(() => {
+          poll().catch((err) => {
+            showMessage(err.message || "获取进度失败");
+            stopPolling();
+            setDisabled(false);
+            showCancel(false);
+          });
+        }, 1000);
+        await poll();
+      };
+
+      const cancelExport = async () => {
+        if (!currentJobId) return;
+        const url = cancelTpl.replace("__JOB__", encodeURIComponent(currentJobId));
+        const resp = await fetch(url, { method: "POST" });
+        const data = await resp.json();
+        if (!data.ok) {
+          throw new Error(data.error || "终止失败");
+        }
+        showMessage("已收到终止请求，正在停止...");
+      };
+
+      standardBtn.addEventListener("click", () => {
+        startExport("standard").catch((err) => {
+          showMessage(err.message || "导出失败");
+        });
+      });
+      newBtn.addEventListener("click", () => {
+        startExport("new").catch((err) => {
+          showMessage(err.message || "导出失败");
+        });
+      });
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+          cancelExport().catch((err) => {
+            showMessage(err.message || "终止失败");
+          });
+        });
+      }
+    })();
+  </script>
+{% endblock %}

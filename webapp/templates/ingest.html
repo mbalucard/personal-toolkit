@@ -1,0 +1,393 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="ui raised segment page-card">
+    <div class="ui relaxed grid stackable">
+      <div class="ten wide column">
+        <h2 class="ui header page-title">抓取入库</h2>
+        <p class="page-desc">按版本号分页拉取药品更新数据，并在写入前先清空该版本号的历史记录。</p>
+      </div>
+      <div class="six wide column">
+        <div class="ui info message">
+          <div class="header">抓取规则</div>
+          <p>接口两次调用间隔必须大于 6 秒，系统会自动兜底，`waiting_time` 最小按 6 秒执行。</p>
+        </div>
+      </div>
+    </div>
+
+    {% if error %}
+      <div class="ui negative message section-gap">
+        <div class="header">抓取失败</div>
+        <p>{{ error }}</p>
+      </div>
+    {% endif %}
+    <form id="ingest-form" class="ui form section-gap" method="post" action="{{ url_for('ingest.ingest_post') }}">
+      <div class="fields">
+        <div class="six wide required field">
+          <label>版本号</label>
+          <input name="version" placeholder="例如 20260509" value="{{ (defaults.get('version') if defaults else '') or '' }}" />
+        </div>
+        <div class="three wide field">
+          <label>每页抓取条数</label>
+          <input name="rows" value="{{ (defaults.get('rows') if defaults else '') or '' }}" />
+        </div>
+        <div class="three wide field">
+          <label>起始页</label>
+          <input name="start_page" value="{{ (defaults.get('start_page') if defaults else '') or '' }}" />
+        </div>
+        <div class="four wide field">
+          <label>结束页</label>
+          <input name="end_page" value="{{ (defaults.get('end_page') if defaults else '') or '' }}" />
+        </div>
+      </div>
+      <div class="fields">
+        <div class="four wide field">
+          <label>接口等待时间（秒）</label>
+          <input name="waiting_time" value="{{ (defaults.get('waiting_time') if defaults else '') or '' }}" />
+        </div>
+        <div class="four wide field">
+          <label>最大重试次数</label>
+          <input name="max_retries" value="{{ (defaults.get('max_retries') if defaults else '') or '' }}" />
+        </div>
+        <div class="four wide field">
+          <label>重试间隔（秒）</label>
+          <input name="retry_delay_seconds" value="{{ (defaults.get('retry_delay_seconds') if defaults else '') or '' }}" />
+        </div>
+      </div>
+      <button id="ingest-submit-btn" class="ui primary button" type="submit">
+        <i class="download icon"></i>
+        开始抓取入库
+      </button>
+      <button id="ingest-resume-btn" class="ui orange button" type="button" style="display: none;">
+        <i class="play icon"></i>
+        继续
+      </button>
+    </form>
+
+    <div id="ingest-live-panel" class="ui segment section-gap">
+      <div class="ui stackable grid">
+        <div class="ten wide column">
+          <h3 class="ui header">抓取实时进度</h3>
+          <p id="ingest-live-message" class="page-desc">点击“开始抓取入库”后，这里会动态展示总页数、当前页、入库行数和耗时。</p>
+        </div>
+        <div class="six wide right aligned middle aligned column">
+          <div style="display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap;">
+            <div id="ingest-status-badge" class="ui grey basic label">未开始</div>
+            <button id="ingest-cancel-btn" class="ui tiny red button" type="button" style="display: none;">
+              <i class="stop icon"></i>
+              终止
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ui tiny progress section-gap" style="margin-bottom: 18px;">
+        <div id="ingest-progress-bar" class="bar" style="width: 0%; min-width: 0;"></div>
+        <div id="ingest-progress-text" class="label">等待任务开始</div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="ui segment stat-card stat-version">
+          <div class="soft-label">版本号</div>
+          <div id="live-version" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-total-records">
+          <div class="soft-label">总记录数</div>
+          <div id="live-total-records" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-total-pages">
+          <div class="soft-label">总页数</div>
+          <div id="live-total-pages" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-rows-per-page">
+          <div class="soft-label">每页条数</div>
+          <div id="live-rows-per-page" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-spacer" aria-hidden="true"></div>
+        <div class="ui segment stat-card stat-current-page">
+          <div class="soft-label">当前页</div>
+          <div id="live-current-page" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-inserted-rows">
+          <div class="soft-label">已写入行数</div>
+          <div id="live-inserted-rows" class="value-text">0</div>
+        </div>
+        <div class="ui segment stat-card stat-processed-pages">
+          <div class="soft-label">已完成页数</div>
+          <div id="live-processed-pages" class="value-text">0</div>
+        </div>
+        <div class="ui segment stat-card stat-page-elapsed">
+          <div class="soft-label">本页耗时</div>
+          <div id="live-page-elapsed" class="value-text">-</div>
+        </div>
+        <div class="ui segment stat-card stat-total-elapsed">
+          <div class="soft-label">累计耗时</div>
+          <div id="live-total-elapsed" class="value-text">0秒</div>
+        </div>
+      </div>
+
+      <div class="ui segment section-gap" style="background: #fbfcfe;">
+        <div class="ui small header">抓取日志</div>
+        <div id="ingest-live-log" class="ui relaxed divided list">
+          <div class="item">
+            <i class="clock outline icon"></i>
+            <div class="content">
+              <div class="header">等待任务开始</div>
+              <div class="description">提交后将实时显示每一页的抓取与入库进度。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const form = document.getElementById("ingest-form");
+      const submitBtn = document.getElementById("ingest-submit-btn");
+      const resumeBtn = document.getElementById("ingest-resume-btn");
+      const statusBadge = document.getElementById("ingest-status-badge");
+      const liveMessage = document.getElementById("ingest-live-message");
+      const progressBar = document.getElementById("ingest-progress-bar");
+      const progressText = document.getElementById("ingest-progress-text");
+      const liveLog = document.getElementById("ingest-live-log");
+      const cancelBtn = document.getElementById("ingest-cancel-btn");
+      let pollTimer = null;
+      let currentJobId = null;
+      let failureCount = 0;
+
+      const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.textContent = value ?? "-";
+        }
+      };
+
+      const renderLogs = (logs) => {
+        if (!logs || logs.length === 0) {
+          liveLog.innerHTML = `
+            <div class="item">
+              <i class="clock outline icon"></i>
+              <div class="content">
+                <div class="header">暂无日志</div>
+                <div class="description">任务启动后会在这里动态展示处理过程。</div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+        liveLog.innerHTML = logs.map((line) => `
+          <div class="item">
+            <i class="database icon"></i>
+            <div class="content">
+              <div class="description">${line}</div>
+            </div>
+          </div>
+        `).join("");
+      };
+
+      const updateBadge = (status) => {
+        const mapping = {
+          queued: ["grey", "排队中"],
+          running: ["blue", "执行中"],
+          success: ["green", "已完成"],
+          cancelled: ["orange", "已终止"],
+          error: ["red", "失败"],
+        };
+        const [color, text] = mapping[status] || ["grey", "未开始"];
+        statusBadge.className = `ui ${color} label`;
+        statusBadge.textContent = text;
+      };
+
+      const updateCancelVisible = (status) => {
+        if (!cancelBtn) return;
+        cancelBtn.style.display = status === "queued" || status === "running" ? "" : "none";
+        cancelBtn.classList.remove("loading", "disabled");
+      };
+
+      const renderJob = (job) => {
+        setText("live-version", job.version || "-");
+        setText("live-total-records", job.total_records ?? "-");
+        setText("live-total-pages", job.total_pages ?? "-");
+        setText("live-rows-per-page", job.rows_per_page ?? "-");
+        setText("live-current-page", job.current_page ?? "-");
+        setText("live-processed-pages", job.processed_pages ?? 0);
+        setText("live-inserted-rows", job.inserted_rows ?? 0);
+        setText("live-page-elapsed", job.last_page_elapsed_text || "-");
+        setText("live-total-elapsed", job.elapsed_text || "0秒");
+        liveMessage.textContent = job.message || "任务已启动";
+        updateBadge(job.status);
+        updateCancelVisible(job.status);
+
+        const processedPages = Number(job.processed_pages || 0);
+        const totalPages = Number(job.total_pages || 0);
+        const percent = totalPages > 0 ? Math.min(100, Math.round((processedPages / totalPages) * 100)) : 0;
+        progressBar.style.width = `${percent}%`;
+        progressText.textContent = totalPages > 0
+          ? `已完成 ${processedPages} / ${totalPages} 页`
+          : "正在获取总页数...";
+
+        renderLogs(job.logs || []);
+
+        if (job.status === "error") {
+          resumeBtn.style.display = "";
+          resumeBtn.classList.remove("disabled", "loading");
+        } else {
+          resumeBtn.style.display = "none";
+          resumeBtn.classList.remove("disabled", "loading");
+        }
+      };
+
+      const stopPolling = () => {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      };
+
+      const startPolling = (jobId) => {
+        stopPolling();
+        currentJobId = jobId;
+        resumeBtn.style.display = "none";
+        resumeBtn.classList.remove("disabled", "loading");
+        failureCount = 0;
+        const fetchStatus = async () => {
+          const resp = await fetch(`{{ url_for('ingest.ingest_status', job_id='__JOB_ID__') }}`.replace("__JOB_ID__", jobId));
+          const data = await resp.json();
+          if (!data.ok) {
+            throw new Error(data.error || "获取任务状态失败");
+          }
+          failureCount = 0;
+          renderJob(data.job);
+        if (data.job.status === "success" || data.job.status === "error" || data.job.status === "cancelled") {
+            stopPolling();
+            submitBtn.classList.remove("loading", "disabled");
+          }
+        };
+
+        fetchStatus().catch((err) => {
+          failureCount += 1;
+          updateBadge("error");
+          liveMessage.textContent = `连接中断：${err.message}，可点击“继续”重试连接`;
+          resumeBtn.style.display = "";
+          resumeBtn.classList.remove("disabled", "loading");
+          if (failureCount >= 3) {
+            submitBtn.classList.remove("loading", "disabled");
+            stopPolling();
+          }
+        });
+        pollTimer = window.setInterval(() => {
+          fetchStatus().catch((err) => {
+            failureCount += 1;
+            updateBadge("error");
+            liveMessage.textContent = `连接中断：${err.message}，可点击“继续”重试连接`;
+            resumeBtn.style.display = "";
+            resumeBtn.classList.remove("disabled", "loading");
+            if (failureCount >= 3) {
+              submitBtn.classList.remove("loading", "disabled");
+              stopPolling();
+            }
+          });
+        }, 2000);
+      };
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        stopPolling();
+        submitBtn.classList.add("loading", "disabled");
+        resumeBtn.style.display = "none";
+        resumeBtn.classList.remove("disabled", "loading");
+        updateBadge("queued");
+        updateCancelVisible("queued");
+        liveMessage.textContent = "任务正在提交...";
+        progressBar.style.width = "0%";
+        progressText.textContent = "等待任务开始";
+        renderLogs(["任务提交中，请稍候..."]);
+
+        const formData = new FormData(form);
+        try {
+          const resp = await fetch(form.action, {
+            method: "POST",
+            body: formData,
+          });
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) {
+            throw new Error(data.error || "提交失败");
+          }
+          startPolling(data.job_id);
+        } catch (err) {
+          updateBadge("error");
+          liveMessage.textContent = err.message;
+          renderLogs([`任务提交失败：${err.message}`]);
+          submitBtn.classList.remove("loading", "disabled");
+        }
+      });
+
+      resumeBtn.addEventListener("click", async () => {
+        if (!currentJobId) {
+          return;
+        }
+        failureCount = 0;
+        resumeBtn.classList.add("loading", "disabled");
+        submitBtn.classList.add("loading", "disabled");
+        updateBadge("queued");
+        liveMessage.textContent = "正在重新连接任务...";
+        renderLogs(["正在重新连接任务..."]);
+        try {
+          const statusResp = await fetch(
+            `{{ url_for('ingest.ingest_status', job_id='__JOB_ID__') }}`.replace("__JOB_ID__", currentJobId),
+          );
+          const statusData = await statusResp.json();
+          if (!statusResp.ok || !statusData.ok) {
+            throw new Error(statusData.error || "获取任务状态失败");
+          }
+
+          if (statusData.job.status !== "error") {
+            startPolling(currentJobId);
+            return;
+          }
+
+          liveMessage.textContent = "任务已失败，正在创建续跑任务...";
+          renderLogs(["任务已失败，正在创建续跑任务..."]);
+          const resp = await fetch(
+            `{{ url_for('ingest.ingest_resume', job_id='__JOB_ID__') }}`.replace("__JOB_ID__", currentJobId),
+            { method: "POST" },
+          );
+          const data = await resp.json();
+          if (!resp.ok || !data.ok) {
+            throw new Error(data.error || "创建续跑任务失败");
+          }
+          startPolling(data.job_id);
+        } catch (err) {
+          updateBadge("error");
+          liveMessage.textContent = err.message;
+          renderLogs([`继续失败：${err.message}`]);
+          submitBtn.classList.remove("loading", "disabled");
+          resumeBtn.classList.remove("loading", "disabled");
+        }
+      });
+
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", async () => {
+          if (!currentJobId) {
+            return;
+          }
+          cancelBtn.classList.add("loading", "disabled");
+          try {
+            const resp = await fetch(
+              `{{ url_for('ingest.ingest_cancel', job_id='__JOB_ID__') }}`.replace("__JOB_ID__", currentJobId),
+              { method: "POST" },
+            );
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) {
+              throw new Error(data.error || "终止失败");
+            }
+            liveMessage.textContent = "已收到终止请求，正在停止...";
+          } catch (err) {
+            liveMessage.textContent = err.message;
+            cancelBtn.classList.remove("loading", "disabled");
+          }
+        });
+      }
+    })();
+  </script>
+{% endblock %}

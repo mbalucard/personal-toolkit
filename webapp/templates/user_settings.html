@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block content %}
+  <style>
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+    .modal-panel {
+      width: 100%;
+      max-width: 520px;
+    }
+  </style>
+  <div class="ui raised segment page-card">
+    <div class="ui stackable grid">
+      <div class="sixteen wide column">
+        <h2 class="ui header page-title">用户设置</h2>
+        <p class="page-desc">新增、编辑、删除可登录账号；姓名用于标记账号使用人（可选）。</p>
+      </div>
+    </div>
+
+    {% if success %}
+      <div class="ui positive message section-gap">
+        <div class="header">操作成功</div>
+        <p>{{ success }}</p>
+      </div>
+    {% endif %}
+
+    {% if error %}
+      <div class="ui negative message section-gap">
+        <div class="header">操作失败</div>
+        <p>{{ error }}</p>
+      </div>
+    {% endif %}
+
+    <div class="ui stackable grid section-gap">
+      <div class="eight wide column">
+        <h3 class="ui header">新增用户</h3>
+        <p class="page-desc" style="margin-top: 6px;">点击按钮弹窗录入新用户信息。</p>
+        <button id="openCreateUserModal" class="ui primary button section-gap" type="button">
+          <i class="user plus icon"></i>
+          创建用户
+        </button>
+      </div>
+
+      <div class="eight wide column">
+        <h3 class="ui header">编辑用户</h3>
+        {% if edit_user %}
+          <form class="ui form" method="post" action="{{ url_for('user_mgmt.update_user', user_id=edit_user.id) }}">
+            <div class="field required">
+              <label>用户名</label>
+              <input name="username" value="{{ edit_user.username }}" placeholder="请输入用户名" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label>姓名（可选）</label>
+              <input name="name" value="{{ edit_user.name or '' }}" placeholder="用于标记账号使用人" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label>新密码（留空则不修改）</label>
+              <input name="password" type="password" placeholder="请输入新密码" autocomplete="new-password" />
+            </div>
+            <div class="field">
+              <label>确认新密码</label>
+              <input name="password_confirm" type="password" placeholder="请再次输入新密码" autocomplete="new-password" />
+            </div>
+            <div class="ui buttons">
+              <button class="ui primary button" type="submit">保存修改</button>
+              <div class="or"></div>
+              <a class="ui button" href="{{ url_for('user_mgmt.user_settings') }}">取消编辑</a>
+            </div>
+          </form>
+        {% else %}
+          <div class="ui info message">
+            <div class="header">提示</div>
+            <p>在下方用户列表中点击“编辑”即可修改用户名、姓名或重置密码。</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ui divider section-gap"></div>
+
+    <div class="table-wrap">
+      <table class="ui celled striped compact small table">
+        <thead>
+          <tr>
+            <th class="center aligned">ID</th>
+            <th>用户名</th>
+            <th>姓名</th>
+            <th>创建时间</th>
+            <th class="center aligned">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            <tr {% if edit_user and edit_user.id == u.id %}class="positive"{% endif %}>
+              <td class="center aligned">{{ u.id }}</td>
+              <td>{{ u.username }}</td>
+              <td>{{ u.name or '' }}</td>
+              <td>
+                {% if u.created_at %}
+                  {{ u.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+              </td>
+              <td class="center aligned">
+                <a class="ui tiny button" href="{{ url_for('user_mgmt.user_settings', edit_id=u.id) }}">编辑</a>
+                <form method="post" action="{{ url_for('user_mgmt.delete_user', user_id=u.id) }}" style="display: inline;">
+                  <button class="ui tiny red button" type="submit" onclick="return confirm('确认删除该用户？');">删除</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="createUserModal" class="modal-backdrop" aria-hidden="true">
+    <div class="ui raised very padded segment page-card modal-panel">
+      <h3 class="ui header" style="margin-top: 0;">创建用户</h3>
+      <form id="createUserForm" class="ui form" method="post" action="{{ url_for('user_mgmt.create_user') }}">
+        <div class="field required">
+          <label>用户名</label>
+          <input name="username" placeholder="请输入用户名" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>姓名（可选）</label>
+          <input name="name" placeholder="用于标记账号使用人" autocomplete="off" />
+        </div>
+        <div class="field required">
+          <label>密码</label>
+          <input name="password" type="password" placeholder="请输入密码" autocomplete="new-password" />
+        </div>
+        <div class="field required">
+          <label>确认密码</label>
+          <input name="password_confirm" type="password" placeholder="请再次输入密码" autocomplete="new-password" />
+        </div>
+        <div class="ui buttons">
+          <button class="ui primary button" type="submit">保存</button>
+          <div class="or"></div>
+          <button id="closeCreateUserModal" class="ui button" type="button">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const createModal = document.getElementById("createUserModal");
+    const openCreateModalButton = document.getElementById("openCreateUserModal");
+    const closeCreateModalButton = document.getElementById("closeCreateUserModal");
+    const createForm = document.getElementById("createUserForm");
+
+    const openCreateModal = () => {
+      if (createForm) {
+        createForm.reset();
+      }
+      createModal.style.display = "flex";
+      createModal.setAttribute("aria-hidden", "false");
+      const firstInput = createForm?.querySelector("input[name='username']");
+      if (firstInput) {
+        firstInput.focus();
+      }
+    };
+
+    const closeCreateModal = () => {
+      createModal.style.display = "none";
+      createModal.setAttribute("aria-hidden", "true");
+    };
+
+    openCreateModalButton?.addEventListener("click", openCreateModal);
+    closeCreateModalButton?.addEventListener("click", closeCreateModal);
+    createModal?.addEventListener("click", (e) => {
+      if (e.target === createModal) {
+        closeCreateModal();
+      }
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        closeCreateModal();
+      }
+    });
+
+    {% if request.args.get('open') == 'create' %}
+      openCreateModal();
+    {% endif %}
+  </script>
+{% endblock %}

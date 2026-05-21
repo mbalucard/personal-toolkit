@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="login-shell">
+    <div class="ui raised very padded text container segment page-card">
+      <div class="ui center aligned basic segment" style="padding-top: 0;">
+        <h1 class="ui header page-title">登录系统</h1>
+      </div>
+
+      {% if error %}
+        <div class="ui negative message">
+          <div class="header">登录失败</div>
+          <p>{{ error }}</p>
+        </div>
+      {% endif %}
+
+      <form class="ui large form" method="post" action="{{ url_for('auth.login_post') }}">
+        <div class="field">
+          <label>用户名</label>
+          <div class="ui left icon input">
+            <input name="username" autocomplete="username" placeholder="请输入用户名" />
+            <i class="user icon"></i>
+          </div>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <div class="ui left icon input">
+            <input name="password" type="password" autocomplete="current-password" placeholder="请输入密码" />
+            <i class="lock icon"></i>
+          </div>
+        </div>
+        <button class="ui fluid primary large button" type="submit">登录</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

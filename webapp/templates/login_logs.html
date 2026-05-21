@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+  <style>
+    .date-field {
+      max-width: 180px;
+    }
+    .date-field input[type="date"] {
+      width: 14ch;
+      min-width: 14ch;
+    }
+  </style>
+  <div class="ui raised segment page-card">
+    <div class="ui stackable grid">
+      <div class="ten wide column">
+        <h2 class="ui header page-title">用户登录日志</h2>
+        <p class="page-desc">按日期范围和用户名查询成功登录记录。</p>
+      </div>
+    </div>
+
+    {% if error %}
+      <div class="ui negative message section-gap">
+        <div class="header">查询失败</div>
+        <p>{{ error }}</p>
+      </div>
+    {% endif %}
+
+    <form class="ui form section-gap" method="get" action="{{ url_for('user_mgmt.login_logs') }}">
+      <div class="fields">
+        <div class="two wide field date-field">
+          <label>开始日期</label>
+          <input class="js-date-picker" name="start_date" type="date" value="{{ filters.start_date }}" />
+        </div>
+        <div class="two wide field date-field">
+          <label>结束日期</label>
+          <input class="js-date-picker" name="end_date" type="date" value="{{ filters.end_date }}" />
+        </div>
+        <div class="three wide field">
+          <label>用户名</label>
+          <input name="username" value="{{ filters.username }}" placeholder="用户名" />
+        </div>
+        <div class="two wide field">
+          <label>每页条数</label>
+          <select name="page_size" class="ui dropdown">
+            {% for s in allowed_page_sizes %}
+              <option value="{{ s }}" {% if page_size == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button class="ui primary button" type="submit">
+        <i class="search icon"></i>
+        开始查询
+      </button>
+    </form>
+
+    <script>
+      const pickers = Array.from(document.querySelectorAll(".js-date-picker"));
+      const openPicker = (el) => {
+        if (typeof el.showPicker === "function") {
+          el.showPicker();
+        }
+      };
+      pickers.forEach((el) => {
+        el.addEventListener("focus", () => openPicker(el));
+        el.addEventListener("click", () => openPicker(el));
+      });
+    </script>
+
+    <div class="ui divider section-gap"></div>
+    <div class="ui stackable grid">
+      <div class="eight wide column">
+        <div class="ui small statistics">
+          <div class="statistic">
+            <div class="value">{{ total }}</div>
+            <div class="label">总记录数</div>
+          </div>
+          <div class="statistic">
+            <div class="value">{{ page }}</div>
+            <div class="label">当前页</div>
+          </div>
+          <div class="statistic">
+            <div class="value">{{ total_pages }}</div>
+            <div class="label">总页数</div>
+          </div>
+        </div>
+      </div>
+      <div class="eight wide right aligned middle aligned column">
+        <div style="display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end;">
+          <div class="ui buttons">
+            {% if page > 1 %}
+              <a class="ui button" href="{{ url_for('user_mgmt.login_logs', start_date=filters.start_date, end_date=filters.end_date, username=filters.username, page=page-1, page_size=page_size) }}">上一页</a>
+            {% else %}
+              <button class="ui button disabled" type="button">上一页</button>
+            {% endif %}
+            {% if total_pages and page < total_pages %}
+              <a class="ui button" href="{{ url_for('user_mgmt.login_logs', start_date=filters.start_date, end_date=filters.end_date, username=filters.username, page=page+1, page_size=page_size) }}">下一页</a>
+            {% else %}
+              <button class="ui button disabled" type="button">下一页</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap section-gap">
+      <table class="ui celled striped compact small table">
+        <thead>
+          <tr>
+            <th class="center aligned">序号</th>
+            <th>用户名</th>
+            <th>登录时间</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in items %}
+            <tr>
+              <td class="center aligned">{{ (page - 1) * page_size + loop.index }}</td>
+              <td>{{ row.username }}</td>
+              <td>
+                {% if row.login_at %}
+                  {{ row.login_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% endif %}
+              </td>
+              <td>{{ row.ip or '' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
