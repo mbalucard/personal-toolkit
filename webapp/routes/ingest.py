@@ -7,6 +7,7 @@ from flask_login import login_required
 
 from webapp.services.ingest import IngestCancelled, IngestResult, ingest_drug_update
 from webapp.services.ingest_tasks import append_job_log, create_job, get_job, update_job
+from webapp.services.version_retention import cleanup_old_versions
 
 
 bp = Blueprint("ingest", __name__, url_prefix="/ingest")
@@ -113,11 +114,18 @@ def _run_ingest_job(job_id: str, payload: dict) -> None:
             """
             event_type = event.get("event")
             if event_type == "meta":
+                start_page = int(event.get("start_page") or 1)
+                total_pages = int(event.get("total_pages") or 0)
+                end_page = event.get("end_page")
+                target_pages = total_pages
+                if end_page is not None and int(end_page) > 0:
+                    target_pages = max(0, int(end_page) - start_page + 1)
                 update_job(
                     job_id,
                     {
                         "total_records": event["total_records"],
                         "total_pages": event["total_pages"],
+                        "target_pages": target_pages,
                         "rows_per_page": event["rows_per_page"],
                         "start_page": event["start_page"],
                         "end_page": event["end_page"],
@@ -179,6 +187,21 @@ def _run_ingest_job(job_id: str, payload: dict) -> None:
             progress_callback=on_progress,
             should_cancel=should_cancel,
         )
+        try:
+            cleanup_result = cleanup_old_versions()
+            if cleanup_result.deleted_versions:
+                deleted_versions_text = "、".join(reversed(cleanup_result.deleted_versions))
+                append_job_log(
+                    job_id,
+                    f"清理旧版本：保留最近{cleanup_result.keep}个版本，删除版本：{deleted_versions_text}，共删除{cleanup_result.deleted_rows}行",
+                )
+            else:
+                append_job_log(
+                    job_id,
+                    f"清理旧版本：当前共有{cleanup_result.total_versions}个版本，未超过保留上限{cleanup_result.keep}，无需删除",
+                )
+        except BaseException as exc:
+            append_job_log(job_id, f"清理旧版本失败：{exc}")
         total_elapsed_seconds = base_elapsed_seconds + float(result.total_elapsed_seconds)
         update_job(
             job_id,
@@ -260,6 +283,7 @@ def ingest_post():
                 "total_records": None,
                 "rows_per_page": payload["rows"],
                 "total_pages": None,
+                "target_pages": None,
                 "start_page": payload["start_page"],
                 "end_page": payload["end_page"],
                 "current_page": None,

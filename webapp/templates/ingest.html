@@ -207,7 +207,18 @@
       const renderJob = (job) => {
         setText("live-version", job.version || "-");
         setText("live-total-records", job.total_records ?? "-");
-        setText("live-total-pages", job.total_pages ?? "-");
+        const totalPagesText = (() => {
+          const totalPages = job.total_pages;
+          const targetPages = job.target_pages;
+          if (totalPages == null && targetPages == null) {
+            return "-";
+          }
+          if (targetPages != null && totalPages != null && Number(targetPages) !== Number(totalPages)) {
+            return `${targetPages}（共${totalPages}）`;
+          }
+          return targetPages ?? totalPages ?? "-";
+        })();
+        setText("live-total-pages", totalPagesText);
         setText("live-rows-per-page", job.rows_per_page ?? "-");
         setText("live-current-page", job.current_page ?? "-");
         setText("live-processed-pages", job.processed_pages ?? 0);
@@ -219,7 +230,7 @@
         updateCancelVisible(job.status);
 
         const processedPages = Number(job.processed_pages || 0);
-        const totalPages = Number(job.total_pages || 0);
+        const totalPages = Number(job.target_pages || job.total_pages || 0);
         const percent = totalPages > 0 ? Math.min(100, Math.round((processedPages / totalPages) * 100)) : 0;
         progressBar.style.width = `${percent}%`;
         progressText.textContent = totalPages > 0

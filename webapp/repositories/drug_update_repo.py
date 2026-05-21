@@ -31,6 +31,27 @@ def delete_by_version(session: Session, version: str) -> int:
     return int(result)
 
 
+def delete_by_versions(session: Session, versions: list[str]) -> int:
+    """
+    批量按版本号删除 drug_update_info 数据。
+
+    Args:
+        session (Session): SQLAlchemy Session。
+        versions (list[str]): 需要删除的版本号列表。
+
+    Returns:
+        int: 删除的行数。
+    """
+    if not versions:
+        return 0
+    result = (
+        session.query(DrugUpdateInfo)
+        .filter(DrugUpdateInfo.version.in_(versions))
+        .delete(synchronize_session=False)
+    )
+    return int(result)
+
+
 def insert_batch_do_nothing(session: Session, rows: list[dict[str, Any]]) -> int:
     """
     批量写入 drug_update_info，遇到冲突则忽略（ON CONFLICT DO NOTHING）。
