@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
@@ -59,8 +61,34 @@ def login_post():
 
     with session_scope() as session:
         user = session.query(User).filter(User.username == username).first()
-        if user is None or not check_password_hash(user.password_hash, password):
+        if user is None:
             return render_template("login.html", error="用户名或密码错误")
+
+        if user.is_active == 0:
+            return render_template("login.html", error="账号已停用")
+
+        now = datetime.now(timezone.utc)
+        locked_until = user.locked_until
+        if locked_until is not None and locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+
+        if locked_until is not None and locked_until > now:
+            return render_template("login.html", error="账号已锁定，请 2 小时后再试")
+
+        if not check_password_hash(user.password_hash, password):
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = now + timedelta(hours=2)
+                return render_template(
+                    "login.html", error="密码错误次数过多，账号已锁定 2 小时"
+                )
+            remaining = 5 - user.failed_login_attempts
+            return render_template(
+                "login.html", error=f"密码错误，还剩 {remaining} 次重试机会"
+            )
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
 
         session.add(
             UserLoginLog(

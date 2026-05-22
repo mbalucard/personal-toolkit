@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ title or "药品更新" }}</title>
+    <title>{{ title or "工具集" }}</title>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/semantic-ui@2.5.0/dist/semantic.min.css"
@@ -151,14 +151,16 @@
                 <a class="item" href="{{ url_for('ingest.ingest_page') }}">抓取入库</a>
               </div>
             </div>
-            <div class="ui simple dropdown item">
-              用户管理
-              <i class="dropdown icon"></i>
-              <div class="menu">
-                <a class="item" href="{{ url_for('user_mgmt.user_settings') }}">用户设置</a>
-                <a class="item" href="{{ url_for('user_mgmt.login_logs') }}">登录日志</a>
+            {% if current_user.is_admin %}
+              <div class="ui simple dropdown item">
+                用户管理
+                <i class="dropdown icon"></i>
+                <div class="menu">
+                  <a class="item" href="{{ url_for('user_mgmt.user_settings') }}">用户设置</a>
+                  <a class="item" href="{{ url_for('user_mgmt.login_logs') }}">登录日志</a>
+                </div>
               </div>
-            </div>
+            {% endif %}
             <div class="right menu">
               <a class="item" href="{{ url_for('auth.logout') }}">退出</a>
             </div>

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from flask_login import UserMixin
-from sqlalchemy import DateTime, Integer, SmallInteger, String, Text, func, text
+from sqlalchemy import Boolean, DateTime, Integer, SmallInteger, String, Text, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -19,6 +19,16 @@ class User(UserMixin, Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[Optional[str]] = mapped_column(String(64))
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    is_active: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("1")
+    )
+    failed_login_attempts: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default=text("0")
+    )
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

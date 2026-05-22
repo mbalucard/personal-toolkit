@@ -38,6 +38,21 @@
       </div>
     {% endif %}
 
+    <form class="ui form section-gap" method="get" action="{{ url_for('user_mgmt.user_settings') }}">
+      <div class="fields">
+        <div class="six wide field">
+          <label>用户状态</label>
+          <select name="status">
+            <option value="1" {% if status == 1 %}selected{% endif %}>可用</option>
+            <option value="0" {% if status == 0 %}selected{% endif %}>不可用</option>
+          </select>
+        </div>
+        <div class="field" style="padding-top: 23px;">
+          <button class="ui primary button" type="submit">筛选</button>
+        </div>
+      </div>
+    </form>
+
     <div class="ui stackable grid section-gap">
       <div class="eight wide column">
         <h3 class="ui header">新增用户</h3>
@@ -52,6 +67,7 @@
         <h3 class="ui header">编辑用户</h3>
         {% if edit_user %}
           <form class="ui form" method="post" action="{{ url_for('user_mgmt.update_user', user_id=edit_user.id) }}">
+            <input type="hidden" name="status" value="{{ status }}" />
             <div class="field required">
               <label>用户名</label>
               <input name="username" value="{{ edit_user.username }}" placeholder="请输入用户名" autocomplete="off" />
@@ -68,10 +84,22 @@
               <label>确认新密码</label>
               <input name="password_confirm" type="password" placeholder="请再次输入新密码" autocomplete="new-password" />
             </div>
+            <div class="field">
+              <div class="ui checkbox">
+                <input
+                  name="is_admin"
+                  type="checkbox"
+                  value="1"
+                  {% if edit_user.is_admin %}checked{% endif %}
+                  {% if edit_user.username == admin_username %}disabled{% endif %}
+                />
+                <label>管理员</label>
+              </div>
+            </div>
             <div class="ui buttons">
               <button class="ui primary button" type="submit">保存修改</button>
               <div class="or"></div>
-              <a class="ui button" href="{{ url_for('user_mgmt.user_settings') }}">取消编辑</a>
+              <a class="ui button" href="{{ url_for('user_mgmt.user_settings', status=status) }}">取消编辑</a>
             </div>
           </form>
         {% else %}
@@ -92,6 +120,9 @@
             <th class="center aligned">ID</th>
             <th>用户名</th>
             <th>姓名</th>
+            <th class="center aligned">状态</th>
+            <th class="center aligned">管理员</th>
+            <th>锁定状态</th>
             <th>创建时间</th>
             <th class="center aligned">操作</th>
           </tr>
@@ -102,16 +133,58 @@
               <td class="center aligned">{{ u.id }}</td>
               <td>{{ u.username }}</td>
               <td>{{ u.name or '' }}</td>
+              <td class="center aligned">
+                {% if u.is_active == 1 %}
+                  可用
+                {% else %}
+                  不可用
+                {% endif %}
+              </td>
+              <td class="center aligned">
+                {% if u.is_admin %}
+                  是
+                {% else %}
+                  否
+                {% endif %}
+              </td>
+              <td>
+                {% if u.id in locked_user_ids %}
+                  锁定至
+                  {% if locked_until_map.get(u.id) %}
+                    {{ locked_until_map.get(u.id).strftime('%Y-%m-%d %H:%M:%S') }}
+                  {% endif %}
+                {% else %}
+                  正常
+                {% endif %}
+              </td>
               <td>
                 {% if u.created_at %}
                   {{ u.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
                 {% endif %}
               </td>
               <td class="center aligned">
-                <a class="ui tiny button" href="{{ url_for('user_mgmt.user_settings', edit_id=u.id) }}">编辑</a>
-                <form method="post" action="{{ url_for('user_mgmt.delete_user', user_id=u.id) }}" style="display: inline;">
-                  <button class="ui tiny red button" type="submit" onclick="return confirm('确认删除该用户？');">删除</button>
-                </form>
+                <a class="ui tiny button" href="{{ url_for('user_mgmt.user_settings', status=status, edit_id=u.id) }}">编辑</a>
+                {% if u.id in locked_user_ids %}
+                  <form method="post" action="{{ url_for('user_mgmt.unlock_user', user_id=u.id) }}" style="display: inline;" data-confirm="确认解锁该用户？">
+                    <input type="hidden" name="status" value="{{ status }}" />
+                    <button class="ui tiny orange button" type="submit">解锁</button>
+                  </form>
+                {% endif %}
+                {% if status == 1 %}
+                  {% if u.is_admin or u.username == admin_username %}
+                    <button class="ui tiny red disabled button" type="button">删除</button>
+                  {% else %}
+                    <form method="post" action="{{ url_for('user_mgmt.delete_user', user_id=u.id) }}" style="display: inline;" data-confirm="确认删除该用户？（删除将标记为不可用，可在“不可用”列表中恢复）">
+                      <input type="hidden" name="status" value="{{ status }}" />
+                      <button class="ui tiny red button" type="submit">删除</button>
+                    </form>
+                  {% endif %}
+                {% else %}
+                  <form method="post" action="{{ url_for('user_mgmt.restore_user', user_id=u.id) }}" style="display: inline;" data-confirm="确认恢复该用户为可用？">
+                    <input type="hidden" name="status" value="{{ status }}" />
+                    <button class="ui tiny green button" type="submit">恢复</button>
+                  </form>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
@@ -124,6 +197,7 @@
     <div class="ui raised very padded segment page-card modal-panel">
       <h3 class="ui header" style="margin-top: 0;">创建用户</h3>
       <form id="createUserForm" class="ui form" method="post" action="{{ url_for('user_mgmt.create_user') }}">
+        <input type="hidden" name="status" value="{{ status }}" />
         <div class="field required">
           <label>用户名</label>
           <input name="username" placeholder="请输入用户名" autocomplete="off" />
@@ -139,6 +213,12 @@
         <div class="field required">
           <label>确认密码</label>
           <input name="password_confirm" type="password" placeholder="请再次输入密码" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <div class="ui checkbox">
+            <input name="is_admin" type="checkbox" value="1" />
+            <label>管理员</label>
+          </div>
         </div>
         <div class="ui buttons">
           <button class="ui primary button" type="submit">保存</button>
@@ -183,6 +263,26 @@
       if (e.key === "Escape") {
         closeCreateModal();
       }
+    });
+
+    const confirmForms = document.querySelectorAll("form[data-confirm]");
+    confirmForms.forEach((form) => {
+      const message = form.getAttribute("data-confirm") || "确认继续？";
+      const confirmAndSubmit = (e) => {
+        if (form.getAttribute("data-confirm-skip") === "1") {
+          return;
+        }
+        e.preventDefault();
+        if (window.confirm(message)) {
+          form.setAttribute("data-confirm-skip", "1");
+          form.submit();
+        }
+      };
+
+      form.addEventListener("submit", confirmAndSubmit);
+      form.querySelectorAll("button[type='submit'], input[type='submit']").forEach((btn) => {
+        btn.addEventListener("click", confirmAndSubmit);
+      });
     });
 
     {% if request.args.get('open') == 'create' %}
