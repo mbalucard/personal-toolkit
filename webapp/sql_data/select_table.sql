@@ -20,4 +20,5 @@ select goodscode,
     productremark
 from {table_name}
 where version = '{batch_number}'
+order by goodscode
 ;

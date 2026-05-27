@@ -88,10 +88,26 @@ class ExportCancelled(Exception):
 
 
 def _temporary_dir() -> Path:
+    """
+    获取临时数据目录。
+
+    Returns:
+        Path: 临时数据目录路径。
+    """
     return Path(root_dir) / "webapp" / "temporary_data"
 
 
 def _cleanup_old_exports(dir_path: Path, *, max_age_seconds: int) -> None:
+    """
+    清理旧的导出文件。
+
+    Args:
+        dir_path (Path): 导出文件目录路径。
+        max_age_seconds (int): 最大文件年龄（秒）。
+
+    Returns:
+        None
+    """
     now = time.time()
     if not dir_path.exists():
         return
@@ -112,12 +128,31 @@ def _cleanup_old_exports(dir_path: Path, *, max_age_seconds: int) -> None:
 
 
 def _safe_fragment(value: str) -> str:
+    """
+    对字符串进行安全处理，确保其作为文件名或数据库字段名时不会导致问题。
+
+    Args:
+        value (str): 输入字符串。
+
+    Returns:
+        str: 处理后的字符串。
+    """
     value = (value or "").strip()
     value = re.sub(r"[^0-9A-Za-z._-]+", "_", value)
     return value.strip("_") or "unknown"
 
 
 def _build_export_file(style: ExportStyle, version: str) -> ExportFile:
+    """
+    构建导出文件对象。
+
+    Args:
+        style (ExportStyle): 导出样式（standard/new）。
+        version (str): 版本号（必填）。
+
+    Returns:
+        ExportFile: 导出文件对象。
+    """
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     filename = f"{ts}_{_safe_fragment(version)}_{style}.xlsx"
     path = _temporary_dir() / filename
@@ -155,6 +190,16 @@ def _safe_progress(
     progress_callback: Callable[[dict], None] | None,
     event: dict,
 ) -> None:
+    """
+    安全调用进度回调函数。
+
+    Args:
+        progress_callback (Callable[[dict], None] | None): 进度回调函数。
+        event (dict): 进度事件数据。
+
+    Returns:
+        None
+    """
     if progress_callback is None:
         return
     try:
@@ -164,6 +209,15 @@ def _safe_progress(
 
 
 def _normalize_sql_for_subquery(sql: str) -> str:
+    """
+    对 SQL 文本进行归一化处理，确保其适合作子查询。
+
+    Args:
+        sql (str): 输入 SQL 文本。
+
+    Returns:
+        str: 归一化后的 SQL 文本。
+    """
     s = (sql or "").strip()
     if s.endswith(";"):
         s = s[:-1].strip()
@@ -171,6 +225,17 @@ def _normalize_sql_for_subquery(sql: str) -> str:
 
 
 def _count_sql_rows(session, sql: str, *, version: str) -> int:
+    """
+    统计指定 SQL 查询的行数。
+
+    Args:
+        session (Session): SQLAlchemy 会话对象。
+        sql (str): 输入 SQL 文本。
+        version (str): 版本号（必填）。
+
+    Returns:
+        int: 查询结果的行数。
+    """
     normalized = _normalize_sql_for_subquery(sql)
     stmt = text(f"SELECT COUNT(*) FROM ({normalized}) AS export_rows")
     value = session.execute(stmt, {"version": version}).scalar()
@@ -190,6 +255,8 @@ def export_xlsx(
     Args:
         style (ExportStyle): 导出样式（standard/new）。
         version (str): 版本号（必填）。
+        progress_callback (Callable[[dict], None] | None): 进度回调函数。
+        should_cancel (Callable[[], bool] | None): 取消检查函数。
 
     Returns:
         ExportFile: 导出文件信息（文件名与二进制内容）。

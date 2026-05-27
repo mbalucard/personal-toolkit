@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -35,6 +36,10 @@ def create_app() -> Flask:
 
     app = Flask(__name__, template_folder="templates", static_folder="static")
     app.secret_key = settings.secret_key
+
+    @app.context_processor
+    def inject_global_config() -> dict[str, str]:
+        return {"icp_number": (os.getenv("ICP_NUMBER") or "").strip()}
 
     init_db()
     Base.metadata.create_all(bind=get_engine())
